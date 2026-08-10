@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>پنل مدیریت آرتمیس</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  body{background:#05060c; color:#eceef7; font-family:'Vazirmatn',sans-serif; margin:0; padding:20px;}
+  .wrap{max-width:640px; margin:0 auto;}
+  h1{font-size:18px; margin-bottom:16px;}
+  .box{background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1); border-radius:14px; padding:16px; margin-bottom:14px;}
+  input, select, button{font-family:inherit; font-size:14px; border-radius:10px; border:1px solid rgba(255,255,255,0.15); padding:10px; background:rgba(0,0,0,0.3); color:#eceef7;}
+  button{cursor:pointer; background:linear-gradient(90deg,#FFC93C,#FF5A36); color:#1a0a02; font-weight:700; border:none;}
+  table{width:100%; border-collapse:collapse; font-size:12.5px; margin-top:10px;}
+  td, th{padding:7px 6px; border-bottom:1px solid rgba(255,255,255,0.08); text-align:right;}
+  .used{color:#FF6B6B;} .unused{color:#5FE3A1;}
+  .row{display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
+  #pwGate{position:fixed; inset:0; background:#05060c; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:10px;}
+  code{background:rgba(255,255,255,0.08); padding:2px 6px; border-radius:6px;}
+</style>
+</head>
+<body>
+
+<div id="pwGate">
+  <div>رمز پنل مدیریت رو وارد کن</div>
+  <input type="password" id="pwInput" placeholder="رمز مدیریت">
+  <button onclick="unlock()">ورود</button>
+</div>
+
+<div class="wrap" id="app" style="display:none;">
+  <h1>🚀 پنل مدیریت آرتمیس — تولید کد اشتراک</h1>
+
+  <div class="box">
+    <div class="row">
+      <select id="planSelect">
+        <option value="1m">۱ ماهه — ۸,۰۰۰ تومن (۳۰ روز)</option>
+        <option value="3m">۳ ماهه — ۲۰,۰۰۰ تومن (۹۰ روز)</option>
+      </select>
+      <button onclick="createCode()">ساخت کد جدید</button>
+    </div>
+    <div id="newCodeResult" style="margin-top:10px; font-size:14px;"></div>
+  </div>
+
+  <div class="box">
+    <div class="row" style="justify-content:space-between;">
+      <b>لیست کدها</b>
+      <button onclick="loadCodes()" style="background:rgba(255,255,255,0.08); color:#eceef7;">بروزرسانی</button>
+    </div>
+    <table>
+      <thead><tr><th>کد</th><th>پلن</th><th>وضعیت</th><th>تاریخ ساخت</th></tr></thead>
+      <tbody id="codesBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+let ADMIN_PW = sessionStorage.getItem('artemis_admin_pw') || '';
+
+function unlock(){
+  ADMIN_PW = document.getElementById('pwInput').value;
+  sessionStorage.setItem('artemis_admin_pw', ADMIN_PW);
+  checkAuth();
+}
+
+async function checkAuth(){
+  const res = await fetch('/api/admin/codes', { headers: { 'x-admin-password': ADMIN_PW } });
+  if(res.ok){
+    document.getElementById('pwGate').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    loadCodes();
+  } else {
+    document.getElementById('pwGate').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
+  }
+}
+
+async function createCode(){
+  const plan = document.getElementById('planSelect').value;
+  const res = await fetch('/api/admin/codes', {
+    method:'POST',
+    headers: { 'Content-Type':'application/json', 'x-admin-password': ADMIN_PW },
+    body: JSON.stringify({ plan })
+  });
+  if(res.ok){
+    const data = await res.json();
+    document.getElementById('newCodeResult').innerHTML = `کد جدید: <code>${data.code}</code> (${data.days} روز) — این رو برای کاربر در تلگرام بفرست.`;
+    loadCodes();
+  } else {
+    document.getElementById('newCodeResult').textContent = 'خطا در ساخت کد.';
+  }
+}
+
+async function loadCodes(){
+  const res = await fetch('/api/admin/codes', { headers: { 'x-admin-password': ADMIN_PW } });
+  if(!res.ok) return;
+  const codes = await res.json();
+  const body = document.getElementById('codesBody');
+  body.innerHTML = '';
+  Object.entries(codes).reverse().forEach(([code, c])=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td><code>${code}</code></td><td>${c.plan}</td><td class="${c.used?'used':'unused'}">${c.used?'استفاده‌شده':'آزاد'}</td><td>${new Date(c.createdAt).toLocaleDateString('fa-IR')}</td>`;
+    body.appendChild(tr);
+  });
+}
+
+checkAuth();
+</script>
+</body>
+</html>
